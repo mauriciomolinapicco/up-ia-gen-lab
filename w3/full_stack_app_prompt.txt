@@ -1,0 +1,35 @@
+Quiero que desarrolles una aplicación web completa de notas simple.
+
+Requisitos funcionales:
+
+El usuario puede crear una nota con: Título y Contenido
+
+Las notas deben guardarse de forma persistente en una base de datos
+Debe existir una vista principal que muestre una lista de todas las notas 
+Al hacer click en una nota, se debe navegar a una vista donde se muestre el titulo y el contenido
+Debe poder crearse nuevas notas desde la interfaz
+
+Requisitos técnicos:
+
+Frontend usando React
+Backend en Django
+Base de datos con SQLite
+API REST con endpoints para:
+Crear nota
+Obtener todas las notas
+Obtener una nota por ID
+
+Requisitos de estructura:
+
+Separar frontend y backend en carpetas distintas
+Incluir instrucciones para ejecutar el proyecto localmente
+Código claro y bien organizado
+
+Extras:
+Estilo básico de la pagina
+Manejo de errores simple
+Validación de campos (título y contenido de nota requeridos)
+
+Objetivo:
+Quiero el proyecto completo funcionando, con todos los archivos necesarios, listo para correr.
+
