@@ -1,12 +1,9 @@
-import pathlib
 import sys
+from pathlib import Path
 import unittest
 
 
-CURRENT_DIR = pathlib.Path(__file__).resolve().parent
-if str(CURRENT_DIR) not in sys.path:
-    sys.path.insert(0, str(CURRENT_DIR))
-
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from PasswordStrengthChecker import PasswordStrengthChecker
 
@@ -15,55 +12,59 @@ class TestPasswordStrengthChecker(unittest.TestCase):
     def setUp(self):
         self.checker = PasswordStrengthChecker()
 
-    def test_init_raises_value_error_when_min_length_is_too_small(self):
-        with self.assertRaisesRegex(
-            ValueError,
-            r"La longitud mínima no puede ser menor a 4 caracteres.",
-        ):
+    def test_constructor_raises_value_error_when_min_length_is_too_small(self):
+        with self.assertRaises(ValueError) as context:
             PasswordStrengthChecker(min_length=3)
 
-    def test_default_min_length_is_applied(self):
-        self.assertEqual(self.checker.min_length, 8)
+        self.assertEqual(
+            str(context.exception),
+            "La longitud mínima no puede ser menor a 4 caracteres.",
+        )
 
     def test_check_strength_raises_type_error_for_non_string_values(self):
-        invalid_values = [None, 123, 12.5, ["Abc123!"], {"password": "Abc123!"}]
+        invalid_values = [None, 123, 12.5, [], {}, True]
 
-        for invalid_value in invalid_values:
-            with self.subTest(invalid_value=invalid_value):
-                with self.assertRaisesRegex(
-                    TypeError,
-                    r"La contraseña debe ser una cadena de texto \(string\).",
-                ):
-                    self.checker.check_strength(invalid_value)
+        for value in invalid_values:
+            with self.subTest(value=value):
+                with self.assertRaises(TypeError) as context:
+                    self.checker.check_strength(value)
 
-    def test_check_strength_returns_very_weak_for_empty_or_whitespace_only_passwords(self):
-        cases = ["", "   ", "\n\t "]
+                self.assertEqual(
+                    str(context.exception),
+                    "La contraseña debe ser una cadena de texto (string).",
+                )
 
-        for password in cases:
+    def test_check_strength_returns_very_weak_for_empty_or_whitespace_passwords(self):
+        self.assertEqual(self.checker.check_strength(""), "MUY DÉBIL")
+        self.assertEqual(self.checker.check_strength("   \t\n  "), "MUY DÉBIL")
+
+    def test_check_strength_returns_very_weak_for_common_passwords_case_insensitive(self):
+        common_passwords = ["password", "Password", "CONTRASEÑA", "Hola123"]
+
+        for password in common_passwords:
             with self.subTest(password=password):
                 self.assertEqual(self.checker.check_strength(password), "MUY DÉBIL")
 
-    def test_check_strength_returns_very_weak_for_common_passwords(self):
-        cases = ["password", "Password", "123456", "CONTRASEÑA"]
+    def test_check_strength_returns_weak_when_password_is_shorter_than_minimum(self):
+        self.assertEqual(self.checker.check_strength("Ab1!xyz"), "DÉBIL")
 
-        for password in cases:
-            with self.subTest(password=password):
-                self.assertEqual(self.checker.check_strength(password), "MUY DÉBIL")
-
-    def test_check_strength_returns_weak_when_below_min_length(self):
-        self.assertEqual(self.checker.check_strength("Ab1!"), "DÉBIL")
-
-    def test_check_strength_returns_weak_when_score_is_low(self):
+    def test_check_strength_returns_weak_when_password_has_only_one_strength_criterion(self):
         self.assertEqual(self.checker.check_strength("abcdefgh"), "DÉBIL")
 
-    def test_check_strength_returns_medium_for_two_criteria(self):
-        self.assertEqual(self.checker.check_strength("Abc12345"), "MEDIANA")
+    def test_check_strength_returns_medium_for_two_strength_criteria(self):
+        self.assertEqual(self.checker.check_strength("Abcdef12"), "MEDIANA")
 
-    def test_check_strength_returns_strong_for_three_criteria(self):
-        self.assertEqual(self.checker.check_strength("Abc123!X"), "FUERTE")
+    def test_check_strength_returns_strong_for_three_strength_criteria(self):
+        self.assertEqual(self.checker.check_strength("Abcdef1!"), "FUERTE")
 
-    def test_check_strength_returns_strong_for_long_password_with_multiple_criteria(self):
-        self.assertEqual(self.checker.check_strength("SuperClave123!"), "FUERTE")
+    def test_check_strength_returns_strong_for_long_passwords_with_extra_length_bonus(self):
+        self.assertEqual(self.checker.check_strength("Abcdef12!XYZ"), "FUERTE")
+
+    def test_check_strength_respects_custom_min_length(self):
+        checker = PasswordStrengthChecker(min_length=12)
+
+        self.assertEqual(checker.check_strength("Abcdef1!"), "DÉBIL")
+        self.assertEqual(checker.check_strength("Abcdef12!XYZ"), "FUERTE")
 
 
 if __name__ == "__main__":

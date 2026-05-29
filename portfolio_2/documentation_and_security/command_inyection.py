@@ -1,33 +1,13 @@
-"""
-Herramienta de diagnóstico del sistema con énfasis en seguridad.
-
-Este módulo ofrece utilidades para obtener información del sistema,
-uso de disco y lectura de logs. Contiene funciones que ejecutan
-comandos del sistema; dichos puntos requieren precaución para evitar
-inyección de comandos y concesión de privilegios innecesarios.
-
-Como regla general:
-- Evitar ejecutar comandos construidos como cadenas por la shell.
-- Usar `subprocess.run` con listas de argumentos (`shell=False`).
-- Validar y/o normalizar cualquier entrada que provenga del usuario.
-"""
-
 import os
 import shutil
 import platform
 import subprocess
+import re
 
 class SystemDiagnostics:
     """
     Herramienta de diagnóstico de sistema para servidores de backend.
     Proporciona información sobre recursos, red y logs.
-
-        Nota de seguridad:
-        - Algunas funciones interactúan con el sistema operativo y pueden
-            exponer riesgos si se les pasa entrada controlada por un atacante.
-        - No llame a los métodos que ejecutan comandos de sistema con
-            parámetros no validados desde interfaces públicas (e.g., APIs
-            expuestas a usuarios finales).
     """
     def __init__(self):
         self.os_type = platform.system()
@@ -71,34 +51,40 @@ class SystemDiagnostics:
         Realiza una traza de red (ping) hacia un host destino.
         Útil para diagnosticar problemas de conectividad rápida.
         """
-        # Construimos la lista de argumentos en lugar de una cadena.
+        # Validar el valor de target_host: permitir solo hostnames e IPs válidas
+        def _is_valid_target(host: str) -> bool:
+            if not host or len(host) > 255:
+                return False
+            # IPv4 simple
+            ipv4 = re.match(r'^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$', host)
+            if ipv4:
+                try:
+                    parts = [int(p) for p in host.split('.')]
+                    return all(0 <= p <= 255 for p in parts)
+                except Exception:
+                    return False
+
+            # Hostname (labels separated by dots, allowed chars: a-zA-Z0-9-)
+            hostname_re = re.compile(r'^(?=.{1,255}$)([a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)(?:\.(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?))*$')
+            return bool(hostname_re.match(host))
+
+        if not _is_valid_target(target_host):
+            return f"Error: target_host inválido: {target_host}"
+
+        # Construir comando como lista (no usar shell) y ejecutar con timeout
         if self.os_type == "Windows":
-            args = ["ping", "-n", "1", target_host]
+            cmd = ["ping", "-n", "1", target_host]
         else:
-            args = ["ping", "-c", "1", target_host]
+            cmd = ["ping", "-c", "1", target_host]
 
-        # Ejecutar sin shell reduce el vector de inyección de comandos.
         try:
-            # timeout evita procesos colgados; captura la salida como texto.
-            completed = subprocess.run(
-                args,
-                capture_output=True,
-                text=True,
-                shell=False,
-                timeout=10
-            )
-
-            # Retornar stdout o, si hay error, stderr para facilitar
-            # diagnóstico; en producción lo ideal es registrar los
-            # errores y retornar un mensaje genérico al usuario.
-            if completed.returncode == 0:
-                return completed.stdout
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                return result.stdout
             else:
-                return completed.stderr or f"Comando finalizado con código {completed.returncode}"
+                return result.stderr or f"Ping falló con código {result.returncode}"
         except subprocess.TimeoutExpired:
-            return "Error: la operación de ping excedió el tiempo límite."
-        except FileNotFoundError:
-            return "Error: comando 'ping' no disponible en el sistema."
+            return "Error: ping agotó el tiempo de espera"
         except Exception as e:
-            # Evitar exponer trazas internas en interfaces públicas.
-            return f"Error al ejecutar ping: {str(e)}"
+            return f"Error ejecutando ping: {e}"
+    
